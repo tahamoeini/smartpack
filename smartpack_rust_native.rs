@@ -50,9 +50,10 @@ fn pack(source: &Path, output: &Path) -> Result<(), String> {
         return Err(format!("source does not exist: {}", source.display()));
     }
     let parent = source.parent().unwrap_or_else(|| Path::new("."));
-    let archive_name = output.file_name().ok_or("output requires a filename")?;
+    let archive_name = output.file_name().ok_or_else(|| format!("output requires a filename: {}", output.display()))?;
+    let source_name = source.file_name().ok_or_else(|| format!("source path must include a filename: {}", source.display()))?;
     let mut tar = Command::new("tar");
-    tar.arg("-C").arg(parent).arg("-czf").arg(output).arg(source.file_name().unwrap_or_default());
+    tar.arg("-C").arg(parent).arg("-czf").arg(output).arg(source_name);
     command_status(&mut tar)?;
 
     let base = source.parent().unwrap_or_else(|| Path::new("."));
@@ -85,7 +86,8 @@ fn unpack(archive: &Path, output_dir: &Path) -> Result<(), String> {
 }
 
 fn verify(archive: &Path) -> Result<(), String> {
-    let manifest_path = archive.with_file_name(format!("{}.sha256", archive.file_name().unwrap().to_string_lossy()));
+    let archive_name = archive.file_name().ok_or_else(|| format!("archive path must include a filename: {}", archive.display()))?;
+    let manifest_path = archive.with_file_name(format!("{}.sha256", archive_name.to_string_lossy()));
     if !manifest_path.exists() {
         return Err(format!("missing manifest: {}", manifest_path.display()));
     }

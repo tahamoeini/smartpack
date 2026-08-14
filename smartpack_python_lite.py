@@ -57,7 +57,9 @@ def manifest_bytes(manifest: dict) -> bytes:
 
 def load_manifest(manifest_path: Path) -> dict:
     raw = manifest_path.read_bytes()
-    if zstd is not None and manifest_path.suffix.lower() == ".zst":
+    if manifest_path.suffix.lower() == ".zst":
+        if zstd is None:
+            raise RuntimeError("manifest is zstd-compressed; install the 'zstandard' package to read it")
         raw = zstd.ZstdDecompressor().decompress(raw)
     if orjson is not None:
         return orjson.loads(raw)
@@ -111,12 +113,17 @@ def pack(source: Path, output: Path) -> None:
     with tarfile.open(output, mode="w:gz", compresslevel=9) as tar:
         tar.add(source, arcname=source.name, recursive=True)
     manifest = build_manifest(source)
-    manifest_name = f"{output.name}.manifest" if zstd is None else f"{output.name}.manifest.zst"
+    manifest_name = f"{output.name}.manifest.zst" if zstd is not None else f"{output.name}.manifest.json"
     manifest_path = output.with_name(manifest_name)
     manifest_path.write_bytes(manifest_bytes(manifest))
     print(f"Packed: {source} -> {output}")
+    active = []
     if zstd is not None:
-        print("Using zstandard and orjson optimizations where available")
+        active.append("zstandard")
+    if orjson is not None:
+        active.append("orjson")
+    if active:
+        print(f"Using optional optimizations: {', '.join(active)}")
 
 
 def unpack(archive: Path, output_dir: Path) -> None:
@@ -132,9 +139,9 @@ def unpack(archive: Path, output_dir: Path) -> None:
 
 def verify(archive: Path) -> None:
     archive = archive.resolve()
-    manifest_path = archive.with_name(f"{archive.name}.manifest.zst")
-    if not manifest_path.exists():
-        manifest_path = archive.with_name(f"{archive.name}.manifest")
+    manifest_path = archive.with_name(f"{archive.name}.manifest.zst") if zstd is not None else archive.with_name(f"{archive.name}.manifest.json")
+    if not manifest_path.exists() and zstd is not None:
+        manifest_path = archive.with_name(f"{archive.name}.manifest.json")
     if not manifest_path.exists():
         raise FileNotFoundError(f"missing manifest: {archive.name}")
     manifest = load_manifest(manifest_path)
