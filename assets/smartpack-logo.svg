@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">SmartPack logo</title>
+  <desc id="desc">A charcoal archive box with an orange top and zipper, above the SmartPack wordmark.</desc>
+  <rect width="800" height="800" rx="56" fill="#ffffff"/>
+
+  <g transform="translate(175 105)">
+    <!-- package top -->
+    <path d="M36 118 L186 50 Q202 42 218 50 L330 102 L180 172 Z" fill="#E95420"/>
+    <path d="M236 28 Q251 21 267 29 L414 97 Q431 105 435 120 L289 187 L202 146 L202 44 Z" fill="#E95420" transform="translate(0 20)"/>
+
+    <!-- package sides -->
+    <path d="M20 144 Q20 129 34 136 L198 211 Q214 219 214 237 L214 430 Q214 448 200 441 L36 366 Q20 358 20 340 Z" fill="#2D333B"/>
+    <path d="M236 223 Q236 207 251 200 L415 126 Q430 119 430 136 L430 335 Q430 353 415 361 L251 437 Q236 444 236 427 Z" fill="#2D333B"/>
+
+    <!-- zipper track -->
+    <rect x="288" y="192" width="18" height="198" rx="8" fill="#ffffff"/>
+    <g fill="#ffffff">
+      <rect x="268" y="225" width="34" height="18" rx="3"/>
+      <rect x="294" y="258" width="34" height="18" rx="3"/>
+      <rect x="268" y="291" width="34" height="18" rx="3"/>
+      <rect x="294" y="324" width="34" height="18" rx="3"/>
+    </g>
+
+    <!-- zipper pull -->
+    <path d="M276 385 Q276 369 292 369 H306 Q322 369 322 385 V433 Q322 454 301 461 L287 465 Q269 467 269 446 Z" fill="#ffffff"/>
+    <rect x="286" y="397" width="20" height="43" rx="6" fill="#E95420"/>
+  </g>
+
+  <text x="400" y="665" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="104" font-weight="700" letter-spacing="-5">
+    <tspan fill="#2D333B">Smart</tspan><tspan fill="#E95420">Pack</tspan>
+  </text>
+</svg>
