@@ -7,6 +7,14 @@
     An adaptive, integrity-checked lossless archiver for Ubuntu,<br/>
     built entirely on Python's standard library.
   </p>
+
+  <a href="https://www.producthunt.com/products/smartpack?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-smartpack" target="_blank" rel="noopener noreferrer">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=dark&amp;t=1789071163896">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=light&amp;t=1789071152289">
+      <img alt="SmartPack - Lossless archiving. Zero dependencies. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=neutral&amp;t=1789071158579">
+    </picture>
+  </a>
 </div>
 
 ---
@@ -187,6 +195,12 @@ Run command-specific help for the complete option set:
 python3 smartpack_ubuntu.py pack --help
 python3 smartpack_ubuntu.py unpack --help
 ```
+
+## Product Hunt
+
+SmartPack is live on [Product Hunt](https://www.producthunt.com/products/smartpack). If you try it, feedback on real datasets, compression behavior, and edge cases is especially useful.
+
+The reusable theme-aware badge embed is kept in [`assets/product-hunt-badge.html`](assets/product-hunt-badge.html).
 
 ---
 
