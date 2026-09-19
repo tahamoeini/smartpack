@@ -164,6 +164,12 @@ def verify(archive: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="lightweight optional-dependency SmartPack archive tool")
+    parser.epilog = "Created by Taha Moeini · https://taha.one"
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="SmartPack Python Lite\nCreated by Taha Moeini · https://taha.one",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     pack_parser = sub.add_parser("pack", help="create a tar.gz archive and a SHA-256 manifest")
