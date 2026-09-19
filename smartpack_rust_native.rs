@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 fn usage() -> String {
-    "usage: smartpack_rust_native <pack|unpack|verify> <source|archive> [output]".to_string()
+    "usage: smartpack_rust_native <pack|unpack|verify> <source|archive> [output]\nCreated by Taha Moeini · https://taha.one".to_string()
 }
 
 fn command_status(cmd: &mut Command) -> Result<(), String> {
@@ -113,6 +113,15 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    if command == "--version" || command == "-V" {
+        println!("SmartPack Rust Native\nCreated by Taha Moeini · https://taha.one");
+        return;
+    }
+    if command == "--help" || command == "-h" {
+        println!("{}", usage());
+        return;
+    }
 
     let result = match command.as_str() {
         "pack" => {
