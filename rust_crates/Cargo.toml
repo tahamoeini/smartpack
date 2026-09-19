@@ -2,6 +2,9 @@
 name = "smartpack_rust_crates"
 version = "0.1.0"
 edition = "2021"
+authors = ["Taha Moeini"]
+homepage = "https://taha.one"
+repository = "https://github.com/tahamoeini/smartpack"
 
 [dependencies]
 flate2 = "1.0"
