@@ -921,10 +921,15 @@ def analyze(source: Path) -> None:
 
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
+        epilog="Created by Taha Moeini · https://taha.one",
         prog="smartpack_ubuntu.py",
         description="Dependency-free adaptive lossless archiver for Ubuntu (Python stdlib only).",
     )
-    p.add_argument("--version", action="version", version=f"SmartPack {VERSION}")
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"SmartPack {VERSION}\nCreated by Taha Moeini · https://taha.one",
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
     a = sub.add_parser("analyze", help="inspect an input tree without creating an archive")
