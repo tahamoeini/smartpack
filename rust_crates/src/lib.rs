@@ -514,7 +514,7 @@ fn key_ref(key: Option<&Zeroizing<[u8; 32]>>) -> Option<&[u8; 32]> {
 
 fn seal(key: &[u8; 32], plain: &[u8], associated_data: &[u8]) -> EngineResult<Vec<u8>> {
     let mut nonce = [0_u8; 24];
-    getrandom::fill(&mut nonce)?;
+    getrandom::fill(&mut nonce).map_err(|error| io::Error::other(error.to_string()))?;
     let cipher = XChaCha20Poly1305::new_from_slice(key)?;
     let encrypted = cipher
         .encrypt(
@@ -651,7 +651,7 @@ fn create_spk(
         output.write_all(&[u8::from(encrypted)])?;
         let mut salt = [0_u8; 16];
         let key = if let Some(password) = password {
-            getrandom::fill(&mut salt)?;
+            getrandom::fill(&mut salt).map_err(|error| io::Error::other(error.to_string()))?;
             output.write_all(&salt)?;
             output.write_all(&DEFAULT_KDF_MEMORY_KIB.to_le_bytes())?;
             output.write_all(&DEFAULT_KDF_ITERATIONS.to_le_bytes())?;
@@ -725,8 +725,7 @@ fn create_spk(
             if item.file_type().is_file() && metadata.len() <= SMALL_FILE_LIMIT {
                 let mut input = File::open(absolute)?;
                 let mut bytes = Vec::new();
-                input
-                    .by_ref()
+                Read::by_ref(&mut input)
                     .take(SMALL_FILE_LIMIT + 1)
                     .read_to_end(&mut bytes)?;
                 if bytes.len() as u64 <= SMALL_FILE_LIMIT {
@@ -1038,7 +1037,7 @@ fn write_block(
     let (method, compressed) = match profile {
         CompressionProfile::Store => (0_u8, data.to_vec()),
         CompressionProfile::Smallest if !is_likely_compressed(data) => {
-            let mut encoder = XzWriter::new(Vec::new(), lzma_rust2::XzOptions::with_preset(6));
+            let mut encoder = XzWriter::new(Vec::new(), lzma_rust2::XzOptions::with_preset(6))?;
             encoder.write_all(data)?;
             let encoded = encoder.finish()?;
             if saves_space(&encoded) {
@@ -1065,7 +1064,7 @@ fn write_block(
     let associated = block_aad(&block_id, data.len() as u64, method);
     let payload = match key {
         Some(key) => seal(key, &compressed, &associated)?,
-        None => compressed,
+        None => compressed.to_vec(),
     };
     output.write_all(b"B")?;
     output.write_all(&block_id)?;
@@ -1850,6 +1849,7 @@ fn inspect_external(archive: &Path) -> EngineResult<Vec<ArchiveEntry>> {
                 }
                 ReaderEvent::Done => return Ok(entries),
                 ReaderEvent::Data(_) | ReaderEvent::ArchiveMetadata(_) | ReaderEvent::EndEntry => {}
+                _ => return Err(invalid("unsupported archive reader event")),
             }
         }
     }
@@ -1865,6 +1865,7 @@ fn inspect_external(archive: &Path) -> EngineResult<Vec<ArchiveEntry>> {
             }
             ReaderEvent::Done => return Ok(entries),
             ReaderEvent::Data(_) | ReaderEvent::ArchiveMetadata(_) | ReaderEvent::EndEntry => {}
+            _ => return Err(invalid("unsupported archive reader event")),
         }
     }
 }
@@ -1911,6 +1912,7 @@ fn verify_external(
             | ReaderEvent::Entry(_)
             | ReaderEvent::ArchiveMetadata(_)
             | ReaderEvent::EndEntry => {}
+            _ => return Err(invalid("unsupported archive reader event")),
         }
     }
 }
