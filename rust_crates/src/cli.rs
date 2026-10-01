@@ -2,7 +2,7 @@ use smartpack_engine::{CompressionProfile, Engine, JobProgress};
 use std::{error::Error, path::PathBuf};
 use zeroize::Zeroize;
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 fn main() {
     if let Err(error) = run() {

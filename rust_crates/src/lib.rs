@@ -2053,7 +2053,8 @@ mod tests {
             }],
         };
         let raw_manifest = serde_json::to_vec(&manifest).unwrap();
-        let mut manifest_encoder = XzWriter::new(Vec::new(), lzma_rust2::XzOptions::with_preset(3));
+        let mut manifest_encoder =
+            XzWriter::new(Vec::new(), lzma_rust2::XzOptions::with_preset(3)).unwrap();
         manifest_encoder.write_all(&raw_manifest).unwrap();
         let stored_manifest = manifest_encoder.finish().unwrap();
         let mut output = File::create(&archive).unwrap();
