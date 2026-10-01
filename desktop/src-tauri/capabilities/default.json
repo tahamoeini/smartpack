@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions required by the SmartPack desktop UI",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

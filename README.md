@@ -1,210 +1,66 @@
-<div align="center">
-  <img src="assets/smartpack-logo.svg" alt="SmartPack logo" width="420" />
-
-  <h3>Lossless archiving. Zero dependencies.</h3>
-
-  <p>
-    An adaptive, integrity-checked lossless archiver for Ubuntu,<br/>
-    built entirely on Python's standard library.
-  </p>
-
-  <a href="https://www.producthunt.com/products/smartpack?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-smartpack" target="_blank" rel="noopener noreferrer">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=dark&amp;t=1789071163896">
-      <source media="(prefers-color-scheme: light)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=light&amp;t=1789071152289">
-      <img alt="SmartPack - Lossless archiving. Zero dependencies. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=neutral&amp;t=1789071158579">
-    </picture>
-  </a>
-</div>
-
----
-
 # SmartPack
 
-SmartPack is a dependency-free lossless archiver designed for Ubuntu. The primary implementation, `smartpack_ubuntu.py`, creates its own `.spk` archive format and decides how to store data block by block instead of applying one compression strategy to everything.
+SmartPack is a local-first archive manager with a shared Rust engine, command-line tools, and a cross-platform Tauri desktop interface. It aims for a straightforward default workflow while exposing compression profiles and security controls when needed.
 
-It is built around a simple constraint: **no 7-Zip, no WinRAR, no zstd CLI, no pip packages, and no network service.**
+> SmartPack does not claim to beat every archive tool on every dataset. Compression results depend on input, codec, CPU, and settings. Comparative claims belong in reproducible, workload-specific benchmarks.
 
-SmartPack combines content-aware compression, cross-file deduplication, solid packing of small files, sparse-data handling, integrity verification, and defensive extraction in one standalone Python script.
+## Current implementation
 
-## Why SmartPack?
+- SPK v3 writer with content-defined chunking, SHA-256 integrity, duplicate-block reuse, zero-chunk representation, streaming input, and bounded per-chunk buffers.
+- SPK v2 reader for the original Python format and SPK v2 verification/extraction.
+- Balanced and Fast profiles using Zstandard, Smallest using LZMA2/XZ, and Store. Already-compressed signatures and unhelpful compression results use raw storage.
+- Optional SPK encryption with Argon2id and XChaCha20-Poly1305. Names and metadata are kept in the encrypted manifest. Passwords are not written to logs or configuration.
+- ZIP creation and safe external extraction through a bundled pure-Rust archive implementation. Supported external readers include ZIP, 7z, TAR, and the enabled gzip, xz, Zstandard, and lz4 filters.
+- Capability-rooted safe extraction. Traversal and absolute paths are rejected, links and special files are disabled by default, and existing destination entries are not overwritten.
+- Tauri 2 desktop interface for Windows, macOS, and Linux, with create, open, extract, verify, recent jobs, drag-and-drop, progress, cancellation, and compression profiles.
+- Shared CLI:
+  ```text
+  smartpack create <source> <archive.spk|archive.zip> [--profile fast|balanced|smallest|store] [--encrypt]
+  smartpack list <archive.spk>
+  smartpack verify <archive>
+  smartpack extract <archive> <destination>
+  smartpack recover create <archive> <output-directory> [recovery-percent]
+  smartpack repair <index.par2> <source-directory> <repaired-output-directory>
+  ```
 
-| Capability | What it does |
-| --- | --- |
-| **Zero external dependencies** | The main implementation uses Python's standard library only. |
-| **Adaptive compression** | Samples data and chooses an appropriate storage/compression path instead of forcing one codec on every block. |
-| **Cross-file deduplication** | Identical fixed-size blocks are stored once and referenced wherever they reappear. |
-| **Solid packing** | Small, similar files can be grouped to expose redundancy across file boundaries. |
-| **Sparse / zero-block optimization** | Zero-filled regions can be represented without storing all those zero bytes. |
-| **Integrity verification** | Every stored block is identified and checked with SHA-256. |
-| **Safer extraction** | Rejects path traversal and unsafe symlink targets by default. |
-| **Filesystem-aware** | Preserves directories, regular files, symlinks, hardlinks, modes, and modification times. |
+## Compatibility and current boundaries
 
-## Requirements
+SPK v3 is the write format. SmartPack continues to read and verify SPK v2; older SmartPack releases are not expected to read v3. The v3 record layout and encryption parameters are documented in [docs/format.md](docs/format.md).
 
-- Ubuntu or another Linux environment
-- **Python 3.10+** for the primary implementation
-- **Python 3.14+ recommended** if you want Python's standard-library Zstandard support via `compression.zstd`
+The desktop and engine groundwork is in place, but this is not yet the full release suite in the approved platform plan. PAR2 creation and repair have CLI, GUI, and shared-engine entry points, but still need end-to-end damaged-file fixtures and cross-tool validation. RAR reading, standalone bzip2-filter extraction, WinZip AES creation, SPK volume splitting, full timestamp/permissions/link/sparse restoration, signed installers, and broad platform smoke testing remain to be completed. Unsupported features should return clear errors. See the [release matrix](docs/release-matrix.md) and [benchmark protocol](docs/benchmarks.md) for the remaining gates.
 
-On older supported Python versions, SmartPack still works using its standard-library LZMA/zlib paths.
+## Build the engine and CLI
 
-## Quick start
+Rust 1.89 or newer is required by the selected codec and archive crates.
 
-Clone the repository:
-
-```bash
-git clone https://github.com/tahamoeini/smartpack.git
-cd smartpack
+```powershell
+cargo test --manifest-path rust_crates/Cargo.toml
+cargo run --manifest-path rust_crates/Cargo.toml -- create .\input .\backup.spk --profile balanced
+cargo run --manifest-path rust_crates/Cargo.toml -- verify .\backup.spk
+cargo run --manifest-path rust_crates/Cargo.toml -- extract .\backup.spk .\restored
 ```
 
-Check the version:
+To create an encrypted SPK, add `--encrypt`; the CLI prompts without echoing the password. ZIP names remain visible by design.
 
-```bash
-python3 smartpack_ubuntu.py --version
+## Build the desktop app
+
+Install the platform prerequisites for Tauri 2 and Node.js 22, then:
+
+```sh
+cd desktop
+npm ci
+npm run tauri dev
 ```
 
-### 1. Analyze before packing
+For a local production bundle, use `npm run tauri build`. Tauri can package platform-native installers, but each platform’s required system libraries, signing, file associations, and installer smoke checks must be verified on that platform before release.
 
-SmartPack can inspect a directory and estimate how compressible its contents look before creating an archive:
+## Repository layout
 
-```bash
-python3 smartpack_ubuntu.py analyze ./my-folder
-```
+- `rust_crates/`: shared archive engine, CLI, and engine tests.
+- `desktop/`: React/TypeScript UI and Tauri 2 host.
+- `docs/`: SPK compatibility notes, release validation, and benchmark protocol.
+- `smartpack_ubuntu.py`, `smartpack_python_lite.py`, `smartpack_python_native.py`, `smartpack_rust_native.rs`: historical prototypes retained for compatibility/reference; new development should use the Rust engine.
 
-### 2. Create an archive
+## License
 
-```bash
-python3 smartpack_ubuntu.py pack ./my-folder -o backup.spk
-```
-
-If `-o` is omitted, SmartPack creates `<source>.spk`.
-
-### 3. List archive contents
-
-```bash
-python3 smartpack_ubuntu.py list backup.spk
-```
-
-### 4. Verify the archive
-
-```bash
-python3 smartpack_ubuntu.py verify backup.spk
-```
-
-Packing performs a full verification pass by default. Use `--no-verify` only when you explicitly want to skip that post-write check.
-
-### 5. Extract
-
-```bash
-python3 smartpack_ubuntu.py unpack backup.spk -o ./restored
-```
-
-Existing files are not overwritten unless you pass `--overwrite`.
-
-## Compression modes
-
-```bash
-python3 smartpack_ubuntu.py pack ./data -o data.spk --mode auto
-```
-
-| Mode | Intended use |
-| --- | --- |
-| `auto` | Default. Chooses compression effort from the observed data. |
-| `fast` | Favors faster compression and lower CPU cost. |
-| `balanced` | Trades more CPU for potentially better compression. |
-| `max` | Uses the most aggressive available settings; expect substantially higher CPU and memory use. |
-
-You can also tune block sizing, solid-pack sizing, and worker count:
-
-```bash
-python3 smartpack_ubuntu.py pack ./data -o data.spk \
-  --mode balanced \
-  --small-kib 256 \
-  --chunk-mib 8 \
-  --solid-mib 4 \
-  -j 4
-```
-
-## How it works
-
-At a high level, SmartPack:
-
-1. Walks the input tree and records filesystem metadata.
-2. Groups eligible small files so cross-file redundancy can be exposed.
-3. Splits larger data into blocks.
-4. Detects zero-filled blocks and avoids storing their full payload.
-5. Hashes blocks with SHA-256 and reuses already-seen blocks instead of storing duplicates.
-6. Probes compressibility and chooses between raw storage and available standard-library codecs.
-7. Writes a compressed manifest describing the archive.
-8. Verifies stored blocks and manifest references before reporting success, unless verification is explicitly disabled.
-
-The result is a custom `.spk` format designed to be read by SmartPack itself.
-
-## Extraction safety
-
-Archive extraction is deliberately defensive:
-
-- archive paths are checked so they cannot escape the selected output directory;
-- absolute or out-of-tree symlink targets are rejected by default;
-- symlinks are created after regular files and hardlinks;
-- overwriting existing files requires explicit opt-in.
-
-There is an `--unsafe-links` option for cases where you intentionally need absolute or out-of-tree symlinks, but it should be treated as an escape hatch rather than the default workflow.
-
-## Zstandard compatibility
-
-When running on Python 3.14+ with `compression.zstd` available, SmartPack may create Zstandard-compressed blocks.
-
-An archive containing those blocks must also be verified or extracted using a Python runtime that provides `compression.zstd`. Archives created without Zstandard support use the other available standard-library compression paths.
-
-## What SmartPack is not
-
-SmartPack does **not** claim to beat 7z, RAR, or every other compressor on every dataset. No lossless compressor can guarantee that.
-
-The project is exploring a different trade-off: how far can a self-contained archiver go when it combines adaptive compression, deduplication, solid packing, integrity checking, and safe extraction without external runtime dependencies?
-
-Also note that `.spk` is a custom format. Common archive tools do not natively open it.
-
-## Repository variants
-
-The repository contains several implementations and experiments:
-
-| Path | Purpose |
-| --- | --- |
-| `smartpack_ubuntu.py` | **Primary implementation.** Custom `.spk` format, adaptive compression, deduplication, solid packing, verification, and safe extraction. |
-| `smartpack_python_native.py` | Simpler Python stdlib variant using `tar.gz` plus a JSON SHA-256 manifest. |
-| `smartpack_python_lite.py` | Python variant that can optionally use `orjson` and `zstandard`, with clean stdlib fallbacks. |
-| `smartpack_rust_native.rs` | Rust experiment built around system `tar` and `sha256sum`. |
-| `rust_crates/` | Crate-based Rust experiment. |
-
-If you just want to try SmartPack, start with **`smartpack_ubuntu.py`**.
-
-## Useful commands
-
-```text
-smartpack_ubuntu.py analyze <source>
-smartpack_ubuntu.py pack <source> [-o archive.spk] [--mode auto|fast|balanced|max]
-smartpack_ubuntu.py list <archive.spk>
-smartpack_ubuntu.py verify <archive.spk>
-smartpack_ubuntu.py unpack <archive.spk> [-o output_dir]
-```
-
-Run command-specific help for the complete option set:
-
-```bash
-python3 smartpack_ubuntu.py pack --help
-python3 smartpack_ubuntu.py unpack --help
-```
-
-## Product Hunt
-
-SmartPack is live on [Product Hunt](https://www.producthunt.com/products/smartpack). If you try it, feedback on real datasets, compression behavior, and edge cases is especially useful.
-
-The reusable theme-aware badge embed is kept in [`assets/product-hunt-badge.html`](assets/product-hunt-badge.html).
-
----
-
-<div align="center">
-  <strong>SmartPack</strong><br/>
-  Pack smarter. Verify everything. Depend on less.
-</div>
+SmartPack is distributed under the Apache License 2.0; see [LICENSE](LICENSE). Third-party dependency notices must be included with binary releases.

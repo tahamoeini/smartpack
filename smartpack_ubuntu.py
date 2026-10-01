@@ -38,7 +38,9 @@ import shutil
 import stat
 import struct
 import sys
+import tempfile
 import time
+import unicodedata
 import zlib
 from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass, field
@@ -280,8 +282,27 @@ def decompress_block(method: int, payload: bytes, raw_size: int) -> bytes:
 
 
 def safe_arc_path(name: str) -> str:
+    if not isinstance(name, str) or not name or "\x00" in name or "\\" in name:
+        raise ValueError(f"unsafe archive path: {name!r}")
+    parts = name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError(f"unsafe archive path: {name!r}")
+    # Keep archive names portable and prevent drive paths, NTFS alternate streams,
+    # device names and names that alias one another on Windows.
+    for part in parts:
+        if any(ord(char) < 32 or char in '<>:"|?*' for char in part):
+            raise ValueError(f"unsafe archive path: {name!r}")
+        if part.endswith((".", " ")):
+            raise ValueError(f"unsafe archive path: {name!r}")
+        device_stem = part.split(".", 1)[0].upper()
+        if device_stem in {"CON", "PRN", "AUX", "NUL"} or (
+            len(device_stem) == 4
+            and device_stem[:3] in {"COM", "LPT"}
+            and device_stem[3] in "123456789"
+        ):
+            raise ValueError(f"unsafe archive path: {name!r}")
     p = PurePosixPath(name)
-    if p.is_absolute() or ".." in p.parts or not p.parts:
+    if p.is_absolute() or not p.parts:
         raise ValueError(f"unsafe archive path: {name!r}")
     return p.as_posix()
 
@@ -730,7 +751,81 @@ def ensure_inside(root: Path, candidate: Path) -> None:
         raise ValueError(f"path escapes extraction root: {candidate}")
 
 
+def is_reparse_or_symlink(path: Path) -> bool:
+    """Detect links and Windows reparse points without following the final path."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    if stat.S_ISLNK(info.st_mode):
+        return True
+    return bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def validate_extraction_plan(root: Path, entries: list[dict], overwrite: bool, unsafe_links: bool) -> None:
+    """Validate all names, relationships and existing conflicts before any writes."""
+    allowed_types = {"dir", "file", "hardlink", "symlink"}
+    types_by_path: dict[str, str] = {}
+    entries_by_key: dict[str, dict] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("type") not in allowed_types:
+            raise ValueError("archive contains an unsupported or malformed entry")
+        rel = safe_arc_path(entry.get("path"))
+        key = unicodedata.normalize("NFC", rel).casefold()
+        if key in entries_by_key:
+            raise ValueError(f"archive contains colliding paths: {rel!r}")
+        entries_by_key[key] = entry
+        types_by_path[key] = entry["type"]
+        if entry["type"] in {"hardlink", "symlink"}:
+            target = entry.get("target")
+            if not isinstance(target, str) or not target:
+                raise ValueError(f"archive contains an invalid link target: {rel!r}")
+            if entry["type"] == "hardlink":
+                safe_arc_path(target)
+            elif not unsafe_links and not safe_symlink_target(rel, target):
+                raise ValueError(f"unsafe symlink target {target!r} in {rel!r}")
+
+    for entry in entries:
+        if entry["type"] == "hardlink":
+            target_key = unicodedata.normalize("NFC", safe_arc_path(entry["target"])).casefold()
+            if types_by_path.get(target_key) != "file":
+                raise ValueError(f"hardlink target is not a regular archive file: {entry['path']!r}")
+
+    for rel, kind in ((safe_arc_path(entry["path"]), entry["type"]) for entry in entries):
+        parts = PurePosixPath(rel).parts
+        parent_key = ""
+        for component in parts[:-1]:
+            parent_key = f"{parent_key}/{component}" if parent_key else component
+            parent_kind = types_by_path.get(unicodedata.normalize("NFC", parent_key).casefold())
+            if parent_kind is not None and parent_kind != "dir":
+                raise ValueError(f"archive path has a non-directory parent: {rel!r}")
+        target = root.joinpath(*parts)
+        ensure_inside(root, target)
+        parent = root
+        for component in parts[:-1]:
+            parent = parent / component
+            if is_reparse_or_symlink(parent):
+                raise ValueError(f"refusing to extract through a link or reparse point: {parent}")
+            if parent.exists() and not parent.is_dir():
+                raise FileExistsError(f"extraction parent is not a directory: {parent}")
+        if is_reparse_or_symlink(target):
+            if kind == "dir":
+                raise ValueError(f"refusing to use a link as an extraction directory: {target}")
+            if not overwrite:
+                raise FileExistsError(f"refusing to overwrite: {target}")
+        elif target.exists():
+            if kind == "dir":
+                if not target.is_dir():
+                    raise FileExistsError(f"directory conflicts with existing file: {target}")
+            elif target.is_dir():
+                raise FileExistsError(f"file conflicts with existing directory: {target}")
+            elif not overwrite:
+                raise FileExistsError(f"refusing to overwrite: {target}")
+
+
 def safe_symlink_target(entry_path: str, target: str) -> bool:
+    if "\\" in target or "\x00" in target or ":" in target or any(ord(char) < 32 for char in target):
+        return False
     t = PurePosixPath(target)
     if t.is_absolute():
         return False
@@ -751,11 +846,16 @@ def unpack(archive: Path, output_dir: Path, overwrite: bool, unsafe_links: bool,
     if any(info.method == METHOD_ZSTD for info in index.values()) and _zstd is None:
         raise RuntimeError("archive uses Zstandard; unpack with Python 3.14+ containing compression.zstd")
 
+    # Authenticate and validate archive content before making any filesystem changes.
+    verify(archive, quiet=True)
+    entries = manifest.get("entries", [])
+    if not isinstance(entries, list):
+        raise ValueError("archive manifest entries are malformed")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_dir = output_dir.resolve()
+    validate_extraction_plan(output_dir, entries, overwrite, unsafe_links)
     cache = LRUCache(cache_mib * 1024**2)
 
-    entries = manifest.get("entries", [])
     # Directories first, then files/hardlinks, symlinks last to reduce traversal hazards.
     dirs = [e for e in entries if e.get("type") == "dir"]
     files = [e for e in entries if e.get("type") == "file"]
@@ -770,41 +870,56 @@ def unpack(archive: Path, output_dir: Path, overwrite: bool, unsafe_links: bool,
 
     for entry in dirs:
         target = target_for(entry)
+        if is_reparse_or_symlink(target):
+            raise ValueError(f"refusing to use a link as an extraction directory: {target}")
         target.mkdir(parents=True, exist_ok=True)
 
     with archive.open("rb") as fp:
         for entry in files:
             target = target_for(entry)
             target.parent.mkdir(parents=True, exist_ok=True)
-            if target.exists() and not overwrite:
+            if (target.exists() or is_reparse_or_symlink(target)) and not overwrite:
                 raise FileExistsError(f"refusing to overwrite: {target}")
-            with target.open("wb") as out:
-                logical_pos = 0
-                for seg in entry.get("segments", []):
-                    if "zero" in seg:
-                        length = int(seg["zero"])
-                        out.seek(length, os.SEEK_CUR)
-                        logical_pos += length
-                        continue
+            fd, temp_name = tempfile.mkstemp(prefix=".smartpack-", dir=target.parent)
+            temp = Path(temp_name)
+            try:
+                with os.fdopen(fd, "wb") as out:
+                    for seg in entry.get("segments", []):
+                        if "zero" in seg:
+                            length = int(seg["zero"])
+                            out.seek(length, os.SEEK_CUR)
+                            continue
 
-                    digest = seg["block"]
-                    info = index[digest]
-                    off = int(seg["offset"])
-                    length = int(seg["length"])
+                        digest = seg["block"]
+                        info = index[digest]
+                        off = int(seg["offset"])
+                        length = int(seg["length"])
 
-                    # Entire zero block segment: create a sparse hole instead of physically writing zeros.
-                    if info.method == METHOD_ZERO and off == 0 and length == info.raw_size:
-                        out.seek(length, os.SEEK_CUR)
-                        logical_pos += length
-                        continue
+                        # Entire zero block segment: create a sparse hole instead of physically writing zeros.
+                        if info.method == METHOD_ZERO and off == 0 and length == info.raw_size:
+                            out.seek(length, os.SEEK_CUR)
+                            continue
 
-                    data = cache.get(digest)
-                    if data is None:
-                        data = load_block(fp, info, digest)
-                        cache.put(digest, data)
-                    out.write(data[off:off+length])
-                    logical_pos += length
-                out.truncate(int(entry["size"]))
+                        data = cache.get(digest)
+                        if data is None:
+                            data = load_block(fp, info, digest)
+                            cache.put(digest, data)
+                        out.write(data[off:off+length])
+                    out.truncate(int(entry["size"]))
+                    out.flush()
+                    os.fsync(out.fileno())
+                if overwrite:
+                    # replace() replaces the destination symlink itself; it never opens its target.
+                    os.replace(temp, target)
+                else:
+                    # Hard-linking the staged file commits atomically and refuses a racing conflict.
+                    os.link(temp, target)
+                    temp.unlink()
+            finally:
+                try:
+                    temp.unlink()
+                except FileNotFoundError:
+                    pass
             apply_metadata(target, entry, follow_symlinks=True)
 
     # Hardlinks after regular files exist.

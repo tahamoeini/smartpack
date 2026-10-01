@@ -1,0 +1,16 @@
+[package]
+name = "smartpack-desktop"
+version = "0.3.0"
+description = "SmartPack cross-platform archive manager"
+authors = ["SmartPack contributors"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+smartpack_engine = { package = "smartpack_rust_crates", path = "../../rust_crates" }
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+zeroize = "1.9"

@@ -1,0 +1,21 @@
+# Rust build products
+**/target/
+
+# Tauri and frontend build products
+**/node_modules/
+desktop/dist/
+desktop/src-tauri/gen/
+desktop/src-tauri/target/
+desktop/src-tauri/binaries/
+**/*.tsbuildinfo
+
+# Local archives and editor state
+*.spk
+*.par2
+**/__pycache__/
+*.py[cod]
+.smartpack-test-*/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
