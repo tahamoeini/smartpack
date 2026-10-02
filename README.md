@@ -1,13 +1,16 @@
-<div align="center">
-  <img src="assets/smartpack-logo.svg" alt="SmartPack logo" width="420" />
+<p align="center">
+  <img src="assets/smartpack-logo.svg" alt="SmartPack logo" width="120" height="120" />
+</p>
 
-  <h3>Private, cross-platform archiving with a shared Rust core.</h3>
+<h1 align="center">SmartPack</h1>
 
-  <p>
-    A local-first archive manager for Windows, macOS, and Linux,<br/>
-    with a desktop app, CLI, adaptive compression, encryption, verification, and recovery workflows.
-  </p>
+<p align="center"><strong>Private, cross-platform archiving with a shared Rust core.</strong></p>
 
+<p align="center">A local-first archive manager for Windows, macOS, and Linux, with a desktop app, CLI, adaptive compression, encryption, verification, and recovery workflows.</p>
+
+<p align="center"><a href="https://github.com/tahamoeini/smartpack/releases" target="_blank" rel="noopener noreferrer">View SmartPack downloads</a></p>
+
+<p align="center">
   <a href="https://www.producthunt.com/products/smartpack?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-smartpack" target="_blank" rel="noopener noreferrer">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=dark&amp;t=1789071163896">
@@ -15,11 +18,7 @@
       <img alt="SmartPack on Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=neutral&amp;t=1789071158579">
     </picture>
   </a>
-</div>
-
-# SmartPack
-
-SmartPack is a local-first archive manager built around a shared Rust engine, a command-line interface, and a Tauri desktop application. It is designed to make everyday archive creation and extraction straightforward while keeping advanced compression, integrity, privacy, and recovery controls available when needed.
+</p>
 
 > **Current beta:** `v0.3.0-beta.1` is an evaluation release. GitHub Actions builds Windows x64, Ubuntu 22.04+ x64, and Intel/Apple-silicon macOS packages. Installers are unsigned and macOS builds are not notarized. Use copies of important data while evaluating the beta. See [GitHub Releases](https://github.com/tahamoeini/smartpack/releases) for availability.
 
