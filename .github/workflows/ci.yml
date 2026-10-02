@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,10 +56,42 @@ jobs:
             desktop/src-tauri -> target
       - name: Install Linux webview dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - run: npm ci
         working-directory: desktop
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch Rust dependencies
+        run: cargo fetch --locked --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Generate target-specific third-party notices
+        run: python tools/generate_third_party_notices.py --output desktop/src-tauri/resources/THIRD_PARTY_NOTICES.md
       - run: npm run build
         working-directory: desktop
       - name: Check native desktop host
         run: cargo check --locked --manifest-path desktop/src-tauri/Cargo.toml
+
+  benchmark:
+    name: Archive benchmark (Ubuntu)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install benchmark tools
+        run: sudo apt-get update && sudo apt-get install -y gzip p7zip-full tar
+      - name: Install optional memory sampler
+        run: python -m pip install psutil
+      - name: Build SmartPack CLI
+        run: cargo build --release --locked --manifest-path rust_crates/Cargo.toml
+      - name: Run deterministic benchmark suite
+        run: python tools/benchmark.py --smartpack rust_crates/target/release/smartpack --repeat 3 --require-tools gzip,7zip --output-dir benchmark-results
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smartpack-benchmark-${{ github.sha }}
+          path: benchmark-results/
+          if-no-files-found: error
+          retention-days: 90

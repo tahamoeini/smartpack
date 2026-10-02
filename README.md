@@ -21,7 +21,7 @@
 
 SmartPack is a local-first archive manager built around a shared Rust engine, a command-line interface, and a Tauri desktop application. It is designed to make everyday archive creation and extraction straightforward while keeping advanced compression, integrity, privacy, and recovery controls available when needed.
 
-> **Current status:** SmartPack is at **v0.3** and should be treated as an active pre-release project. The engine and desktop host build successfully in CI on Windows, macOS, and Linux, but signed installers and broad platform smoke testing are not complete yet. There are currently no published GitHub Releases.
+> **Current beta:** `v0.3.0-beta.1` is an evaluation release. GitHub Actions builds Windows x64, Ubuntu 22.04+ x64, and Intel/Apple-silicon macOS packages. Installers are unsigned and macOS builds are not notarized. Use copies of important data while evaluating the beta. See [GitHub Releases](https://github.com/tahamoeini/smartpack/releases) for availability.
 
 SmartPack does not claim to beat every archive tool on every dataset. Compression results depend on input, codec, CPU, filesystem, and settings. Comparative claims belong in reproducible, workload-specific benchmarks using the current engine.
 
@@ -45,11 +45,11 @@ SmartPack does not claim to beat every archive tool on every dataset. Compressio
   smartpack repair <index.par2> <source-directory> <repaired-output-directory>
   ```
 
-## What it does not claim yet
+## Compatibility and current boundaries
 
-SmartPack is not yet a drop-in replacement for every mature archive suite. PAR2 creation and repair have CLI, GUI, and shared-engine entry points, but still need end-to-end damaged-file fixtures and cross-tool validation. RAR reading, standalone bzip2-filter extraction, WinZip AES creation, SPK volume splitting, full timestamp/permissions/link/sparse restoration, signed installers, and broad platform smoke testing remain to be completed.
+SmartPack is not yet a drop-in replacement for every mature archive suite. PAR2 creation and repair have CLI, GUI, and shared-engine entry points, but still need end-to-end damaged-file fixtures and cross-tool validation. RAR reading, standalone bzip2-filter extraction, WinZip AES creation, SPK volume splitting, and full timestamp/permissions/link/sparse restoration are not implemented. Signed installers and broad platform smoke testing remain stable-release work.
 
-See the [release validation matrix](docs/release-matrix.md) and [benchmark protocol](docs/benchmarks.md) for the remaining release gates.
+See the [release validation matrix](docs/release-matrix.md) and [benchmark comparison](docs/benchmarks.md) for exact coverage and remaining release gates.
 
 ## Build the engine and CLI
 
@@ -66,7 +66,7 @@ To create an encrypted SPK, add `--encrypt`; the CLI prompts without echoing the
 
 ## Build the desktop app
 
-Install the platform prerequisites for Tauri 2 and Node.js 22, then:
+Follow [Tauri's platform prerequisites](https://v2.tauri.app/start/prerequisites/) for Windows, macOS, or Linux, and install Node.js 22. For development:
 
 ```sh
 cd desktop
@@ -74,11 +74,15 @@ npm ci
 npm run tauri dev
 ```
 
-For a local production bundle, use `npm run tauri build`. Tauri can package platform-native installers, but each platform’s required system libraries, signing, file associations, and installer smoke checks must be verified before distribution.
+Before a local production bundle, run `npm ci`, then from the repository root run `cargo fetch --locked --manifest-path desktop/src-tauri/Cargo.toml` and `python tools/generate_third_party_notices.py --output desktop/src-tauri/resources/THIRD_PARTY_NOTICES.md`. Then run `npm run tauri build` from `desktop`. The tag-triggered workflow performs these steps on native GitHub-hosted runners.
+
+## Benchmarks and tool comparison
+
+The deterministic benchmark suite compares SmartPack with tar+gzip and 7-Zip on text, incompressible, many-small-file, and duplicate-file workloads. It verifies extracted hashes and publishes JSON/CSV results with each CI run. WinRAR/RAR and WinZip can also be measured locally when their command-line tools are installed; CI does not install commercial archivers. See [benchmark instructions and comparison](docs/benchmarks.md).
 
 ## Product Hunt copy
 
-The current public positioning and the exact Product Hunt fields that match the v0.3 implementation are maintained in [docs/product-hunt.md](docs/product-hunt.md). Historical Python-only claims and early benchmark numbers should not be reused for the current Rust-based product unless they are reproduced against the current engine.
+The current public positioning and the exact Product Hunt fields that match the v0.3 implementation are maintained in [docs/product-hunt.md](docs/product-hunt.md). Historical Python-only claims and early benchmark numbers should not be reused for the current Rust-based product unless reproduced against the current engine.
 
 ## Repository layout
 
@@ -89,4 +93,4 @@ The current public positioning and the exact Product Hunt fields that match the 
 
 ## License
 
-SmartPack is distributed under the Apache License 2.0; see [LICENSE](LICENSE). Third-party dependency notices must be included with binary releases.
+SmartPack is distributed under the Apache License 2.0; see [LICENSE](LICENSE). Third-party dependency notices are bundled in each beta installer.

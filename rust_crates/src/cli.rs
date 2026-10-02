@@ -18,6 +18,14 @@ fn run() -> Result<()> {
     };
     let engine = Engine::new();
     match command.as_str() {
+        "--version" | "-V" => {
+            println!("smartpack {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        "--help" | "-h" => {
+            print_usage();
+            return Ok(());
+        }
         "create" | "pack" => {
             let source = required(&mut args, "source path")?;
             let destination = required(&mut args, "destination path")?;
@@ -164,8 +172,12 @@ fn human_size(bytes: u64) -> String {
 }
 
 fn usage<T>() -> Result<T> {
-    eprintln!("SmartPack — cross-platform archive tools\n\n\
+    print_usage();
+    Err("invalid command line".into())
+}
+
+fn print_usage() {
+    println!("SmartPack — cross-platform archive tools\n\n\
 Usage:\n  smartpack create <source> <archive.spk|archive.zip> [--profile fast|balanced|smallest|store] [--encrypt]\n  smartpack list <archive.spk>\n  smartpack verify <archive>\n  smartpack extract <archive> <destination>\n  smartpack recover create <archive> <output-directory> [recovery-percent]\n  smartpack repair <index.par2> <source-directory> <repaired-output-directory>\n\n\
 SPK v3 archives support optional password encryption. ZIP filenames remain visible.");
-    Err("invalid command line".into())
 }

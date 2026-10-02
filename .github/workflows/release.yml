@@ -1,0 +1,94 @@
+name: Beta release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - label: Ubuntu 22.04 x64
+            runner: ubuntu-22.04
+            args: --bundles deb,appimage
+            rust-targets: ''
+            target: x86_64-unknown-linux-gnu
+          - label: Windows x64
+            runner: windows-latest
+            args: --bundles nsis
+            rust-targets: ''
+            target: x86_64-pc-windows-msvc
+          - label: macOS Apple silicon
+            runner: macos-15
+            args: --target aarch64-apple-darwin --bundles dmg
+            rust-targets: aarch64-apple-darwin
+            target: aarch64-apple-darwin
+          - label: macOS Intel
+            runner: macos-15-intel
+            args: --target x86_64-apple-darwin --bundles dmg
+            rust-targets: x86_64-apple-darwin
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust_crates -> target
+            desktop/src-tauri -> target
+      - name: Install Linux Tauri dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl file libfuse2 libssl-dev libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf wget
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: desktop
+      - name: Fetch Rust dependencies for license audit
+        run: cargo fetch --locked --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Generate target-specific third-party notices
+        run: python tools/generate_third_party_notices.py --target "${{ matrix.target }}" --output desktop/src-tauri/resources/THIRD_PARTY_NOTICES.md
+      - name: Build and upload beta installers
+        uses: tauri-apps/tauri-action@action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: v__VERSION__
+          releaseName: SmartPack v__VERSION__ (Beta)
+          releaseBody: |
+            SmartPack beta for Windows x64, Ubuntu 22.04+ x64, and macOS Intel/Apple silicon.
+
+            This is an unsigned, pre-release build. Review the known limitations in the README and test with copies of important data. The installers bundle the project license and third-party notices.
+          releaseDraft: true
+          prerelease: true
+          args: ${{ matrix.args }}
+
+  publish:
+    name: Publish beta release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish after every platform bundle is uploaded
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease
