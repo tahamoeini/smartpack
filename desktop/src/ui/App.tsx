@@ -12,6 +12,8 @@ type Entry = { path: string; type: string; size: number };
 type Progress = { phase: string; completed_bytes: number; total_bytes?: number | null; current_path?: string | null; throughput_bytes_per_second?: number | null };
 type Job = { id: string; title: string; operation: string; phase: string; completed: number; total?: number | null; speed?: number | null; status: "running" | "done" | "error"; message?: string };
 
+const supportedArchiveExtensions = ["spk", "zip", "7z", "tar", "gz", "xz", "zst", "lz4"] as const;
+
 const prettySize = (n: number) => {
   if (!n) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -19,9 +21,14 @@ const prettySize = (n: number) => {
   return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 };
 
+const readSavedProfile = (): Profile => {
+  const stored = window.localStorage.getItem("smartpack.defaultProfile");
+  return stored === "fast" || stored === "balanced" || stored === "smallest" || stored === "store" ? stored : "balanced";
+};
+
 export default function App() {
   const [page, setPage] = useState<Page>("home");
-  const [profile, setProfile] = useState<Profile>("balanced");
+  const [profile, setProfile] = useState<Profile>(readSavedProfile);
   const [archiveFormat, setArchiveFormat] = useState<ArchiveFormat>("spk");
   const [encrypt, setEncrypt] = useState(false);
   const [password, setPassword] = useState("");
@@ -37,6 +44,10 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
 
   const visibleEntries = useMemo(() => entries.filter((entry) => entry.path.toLowerCase().includes(filter.toLowerCase())), [entries, filter]);
+
+  useEffect(() => {
+    window.localStorage.setItem("smartpack.defaultProfile", profile);
+  }, [profile]);
 
   useEffect(() => {
     let active = true;
@@ -65,10 +76,10 @@ export default function App() {
   }, []);
 
   async function openArchive(path?: string) {
-    const selected = path || await open({ multiple: false, filters: [{ name: "Archives", extensions: ["spk", "zip", "7z", "tar", "gz", "xz", "zst", "bz2"] }] });
+    const selected = path || await open({ multiple: false, filters: [{ name: "Archives", extensions: [...supportedArchiveExtensions] }] });
     if (!selected || Array.isArray(selected)) return;
     const extension = selected.split(/[\\/]/).at(-1)?.split(".").at(-1)?.toLowerCase();
-    if (!extension || !["spk", "zip", "7z", "tar", "gz", "xz", "zst", "bz2"].includes(extension)) {
+    if (!extension || !supportedArchiveExtensions.includes(extension as typeof supportedArchiveExtensions[number])) {
       setSource(selected); setArchive(null); setEntries([]); setPage("home"); return;
     }
     setArchive(selected);
@@ -100,7 +111,7 @@ export default function App() {
   }
 
   async function beginVerify() {
-    if (!archive) return setNotice("Open an archive first.");
+    if (!archive) { await openArchive(); return; }
     if (requiresPassword && !archivePassword) return setNotice("Enter the archive password above.");
     try {
       const id = await invoke<string>("verify_archive", { archive, password: requiresPassword ? archivePassword : null });
@@ -110,10 +121,10 @@ export default function App() {
   }
 
   async function beginExtract() {
-    if (!archive) return setNotice("Open an archive first.");
+    if (!archive) { await openArchive(); return; }
+    if (requiresPassword && !archivePassword) return setNotice("Enter the archive password above.");
     const destination = await open({ directory: true, multiple: false, title: "Choose where to extract" });
     if (!destination || Array.isArray(destination)) return;
-    if (requiresPassword && !archivePassword) return setNotice("Enter the archive password above.");
     try {
       const id = await invoke<string>("extract_archive", { archive, destination, password: requiresPassword ? archivePassword : null });
       setArchivePassword("");
@@ -162,16 +173,16 @@ export default function App() {
       {notice && <button className="notice" onClick={() => setNotice("")}><span>{notice}</span><X size={15}/></button>}
 
       {page === "home" && <div className="page-content">
-        <div className="welcome-row"><div><div className="eyebrow">YOUR FILES, PACKED SMARTER</div><h1>What would you like to do?</h1><p>Fast, dependable archives that stay on your device.</p></div><div className="hero-mark"><Archive size={28}/></div></div>
+        <div className="welcome-row"><div><div className="eyebrow">YOUR FILES, PACKED SMARTER</div><h1>What would you like to do?</h1><p>Dependable archives that stay on your device.</p></div><div className="hero-mark"><Archive size={28}/></div></div>
         <div className={`drop-zone ${dragging ? "dragging" : ""}`} onClick={() => void openArchive()}>
-          <div className="drop-icon"><FolderOpen size={22}/></div><strong>Drop an archive here to open it</strong><span>SPK, ZIP, 7z, TAR and more</span><button className="text-button" onClick={(event) => { event.stopPropagation(); void openArchive(); }}>Browse archives <ChevronRight size={14}/></button>
+          <div className="drop-icon"><FolderOpen size={22}/></div><strong>Drop an archive here to open it</strong><span>SPK, ZIP, 7z, TAR, gzip, xz, Zstandard, and lz4</span><button className="text-button" onClick={(event) => { event.stopPropagation(); void openArchive(); }}>Browse archives <ChevronRight size={14}/></button>
           {dragging && <div className="drop-overlay">Drop to open archive</div>}
         </div>
-        <section className="section-heading"><div><h2>Quick actions</h2><p>Start with one click, adjust options when you need them.</p></div></section>
+        <section className="section-heading"><div><h2>Quick actions</h2><p>Start a workflow, then review the options before SmartPack runs it.</p></div></section>
         <div className="action-grid">
           <button className="action-card primary-card" onClick={() => void chooseSource()}><span className="action-icon violet"><Plus size={19}/></span><strong>Create archive</strong><small>Pack a file or folder into SPK or ZIP</small><span className="card-arrow"><ChevronRight size={17}/></span></button>
-          <button className="action-card" onClick={() => void openArchive()}><span className="action-icon blue"><FolderOpen size={19}/></span><strong>Extract files</strong><small>Open and unpack an existing archive</small><span className="card-arrow"><ChevronRight size={17}/></span></button>
-          <button className="action-card" onClick={() => void beginVerify()}><span className="action-icon green"><ShieldCheck size={19}/></span><strong>Verify archive</strong><small>Check archive integrity before use</small><span className="card-arrow"><ChevronRight size={17}/></span></button>
+          <button className="action-card" onClick={() => void beginExtract()}><span className="action-icon blue"><FolderOpen size={19}/></span><strong>Extract files</strong><small>Open an archive, review it, then extract safely</small><span className="card-arrow"><ChevronRight size={17}/></span></button>
+          <button className="action-card" onClick={() => void beginVerify()}><span className="action-icon green"><ShieldCheck size={19}/></span><strong>Verify archive</strong><small>Open an archive and check its integrity</small><span className="card-arrow"><ChevronRight size={17}/></span></button>
         </div>
         <button className="folder-source-link" onClick={() => void chooseSource(true)}>Or choose a folder to archive <ChevronRight size={13}/></button>
         {source && <div className="create-panel"><div className="panel-top"><div><div className="eyebrow">READY TO PACK</div><strong>{source.split(/[\\/]/).at(-1)}</strong></div><button className="icon-button" onClick={() => setSource(null)} aria-label="Clear source"><X size={16}/></button></div><div className="options-row"><label>Format<select value={archiveFormat} onChange={(event) => { const value = event.target.value as ArchiveFormat; setArchiveFormat(value); if (value === "zip") { setEncrypt(false); setPassword(""); } }}><option value="spk">SmartPack (.spk)</option><option value="zip">ZIP (.zip)</option></select></label><label>Compression profile<select value={profile} disabled={archiveFormat === "zip"} onChange={(event) => setProfile(event.target.value as Profile)}><option value="fast">Fast</option><option value="balanced">Balanced</option><option value="smallest">Smallest</option><option value="store">Store</option></select></label><label className="check-label"><input type="checkbox" checked={encrypt} disabled={archiveFormat === "zip"} onChange={(event) => setEncrypt(event.target.checked)}/><LockKeyhole size={14}/> Encrypt with password</label>{encrypt && <input className="password-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Archive password"/>}<button className="button button-primary" onClick={() => void beginCreate()}>Create archive <ChevronRight size={15}/></button></div><small style={{color:"#8992a2",fontSize:10,marginTop:8,display:"block"}}>{archiveFormat === "zip" ? "ZIP uses Deflate. Compression profiles and SPK encryption apply only to SPK." : "SPK uses the selected profile and supports password encryption."}</small></div>}
@@ -180,7 +191,7 @@ export default function App() {
 
       {page === "jobs" && <div className="page-content"><div className="eyebrow">RECENT WORK</div><h1>Activity</h1><p className="page-subtitle">Track progress and outcomes from archive jobs.</p>{jobs.length === 0 ? <div className="empty-state"><span className="empty-icon"><Gauge size={22}/></span><strong>No recent jobs</strong><span>Created, extracted and verified archives will show here.</span></div> : <div className="jobs-list">{jobs.map((job) => { const percent = job.total ? Math.min(100, Math.round(job.completed * 100 / job.total)) : 0; return <article className="job-card" key={job.id}><div className={`job-symbol ${job.status}`} >{job.status === "done" ? <Check size={17}/> : job.status === "error" ? <X size={17}/> : <Archive size={17}/>}</div><div className="job-info"><div className="job-title"><strong>{job.operation}</strong><span>{job.status === "running" ? job.phase : job.status === "done" ? "Completed" : "Failed"}</span></div><div className="job-detail">{job.title}{job.speed ? ` · ${prettySize(job.speed)}/s` : ""}{job.message && job.status === "error" ? ` · ${job.message}` : ""}</div>{job.status === "running" && <div className="progress-track"><span style={{ width: `${percent}%` }}/></div>}</div>{job.status === "running" && job.operation !== "Repair from PAR2" && <button className="icon-button" onClick={() => void invoke("cancel_job", { id: job.id }).catch((error) => setNotice(String(error)))} title="Cancel job"><X size={16}/></button>}</article>; })}</div>}</div>}
 
-      {page === "settings" && <div className="page-content"><div className="eyebrow">PREFERENCES</div><h1>Settings</h1><p className="page-subtitle">Choose how SmartPack balances speed, size and privacy.</p><section className="settings-card"><div className="settings-heading"><span className="action-icon violet"><Gauge size={18}/></span><div><strong>Default compression profile</strong><small>Applied when creating a new archive</small></div></div><div className="profile-options">{([["fast", "Fast", "Lower CPU use, quicker results"], ["balanced", "Balanced", "A practical speed and size balance"], ["smallest", "Smallest", "More CPU time to reduce archive size"], ["store", "Store", "Skip compression for maximum speed"]] as const).map(([value, title, detail]) => <button className={`profile-option ${profile === value ? "selected" : ""}`} key={value} onClick={() => setProfile(value)}><span className="radio-dot"/><span><strong>{title}</strong><small>{detail}</small></span></button>)}</div></section><section className="settings-card"><div className="settings-heading"><span className="action-icon green"><ShieldCheck size={18}/></span><div><strong>Privacy &amp; security</strong><small>Archive processing stays on this device</small></div></div><div className="privacy-note"><LockKeyhole size={16}/><span>SmartPack runs offline. Passwords are used only for the current operation and are not saved.</span></div></section></div>}
+      {page === "settings" && <div className="page-content"><div className="eyebrow">PREFERENCES</div><h1>Settings</h1><p className="page-subtitle">Choose how SmartPack balances speed, size and privacy.</p><section className="settings-card"><div className="settings-heading"><span className="action-icon violet"><Gauge size={18}/></span><div><strong>Default compression profile</strong><small>Saved on this device and applied when creating a new SPK archive</small></div></div><div className="profile-options">{([["fast", "Fast", "Lower CPU use, quicker results"], ["balanced", "Balanced", "A practical speed and size balance"], ["smallest", "Smallest", "More CPU time to reduce archive size"], ["store", "Store", "Skip compression for maximum speed"]] as const).map(([value, title, detail]) => <button className={`profile-option ${profile === value ? "selected" : ""}`} key={value} onClick={() => setProfile(value)}><span className="radio-dot"/><span><strong>{title}</strong><small>{detail}</small></span></button>)}</div></section><section className="settings-card"><div className="settings-heading"><span className="action-icon green"><ShieldCheck size={18}/></span><div><strong>Privacy &amp; security</strong><small>Archive processing stays on this device</small></div></div><div className="privacy-note"><LockKeyhole size={16}/><span>SmartPack runs offline. Passwords are used only for the current operation and are not saved.</span></div></section></div>}
     </main>
   </div>;
 }
