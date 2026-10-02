@@ -79,7 +79,7 @@ pub struct ArchiveEntry {
     pub modified_ns: Option<u64>,
     pub mode: Option<u32>,
     #[serde(default)]
-    pub segments: Vec<Segment>,
+    segments: Vec<Segment>,
     #[serde(default)]
     pub target: Option<String>,
 }
@@ -1184,7 +1184,7 @@ fn read_spk_index(path: &Path, password: Option<&str>) -> EngineResult<ArchiveIn
                 let plain = if version == 3 {
                     zstd::bulk::decompress(&compressed, raw_size as usize)?
                 } else {
-                    let mut decoder =
+                    let decoder =
                         XzReader::new_mem_limit(compressed.as_slice(), false, MAX_LZMA_MEMORY_KIB);
                     let mut bytes = Vec::with_capacity(raw_size as usize);
                     decoder
@@ -1789,10 +1789,15 @@ fn extract_external(
     for entry in &entries {
         preflight_destination(&root, &entry.path, entry.kind == "directory")?;
     }
-    let input = File::open(archive)?;
-    let mut reader = ArchiveReader::new(input);
     check_cancel(cancel)?;
-    let report = Extractor::new(root).extract(&mut reader)?;
+    let mut extractor = Extractor::new(root);
+    let report = match libarchive_oxide::SeekArchiveReader::new(File::open(archive)?) {
+        Ok(mut reader) => extractor.extract_seek_matching(&mut reader, |_| true)?,
+        Err(_) => {
+            let mut reader = ArchiveReader::new(File::open(archive)?);
+            extractor.extract(&mut reader)?
+        }
+    };
     if report.has_rejections() {
         return Err(invalid(
             "archive contained entries rejected by the safe extraction policy",
@@ -1902,7 +1907,20 @@ fn verify_external(
     cancel: &AtomicBool,
     _progress: &mut impl FnMut(JobProgress),
 ) -> EngineResult<()> {
-    use libarchive_oxide::{ArchiveReader, ReaderEvent};
+    use libarchive_oxide::{ArchiveReader, ReaderEvent, SeekArchiveReader};
+    if let Ok(mut reader) = SeekArchiveReader::new(File::open(archive)?) {
+        loop {
+            check_cancel(cancel)?;
+            match reader.next_event()? {
+                ReaderEvent::Done => return Ok(()),
+                ReaderEvent::Data(_)
+                | ReaderEvent::Entry(_)
+                | ReaderEvent::ArchiveMetadata(_)
+                | ReaderEvent::EndEntry => {}
+                _ => return Err(invalid("unsupported archive reader event")),
+            }
+        }
+    }
     let mut reader = ArchiveReader::new(File::open(archive)?);
     loop {
         check_cancel(cancel)?;
