@@ -73,7 +73,7 @@ fn run() -> Result<()> {
         }
         "list" | "inspect" => {
             let archive = PathBuf::from(required(&mut args, "archive path")?);
-            let mut password = optional_password(&engine, &archive)?;
+            let mut password = optional_password(&archive)?;
             let result = engine.inspect(&archive, password.as_deref());
             password.zeroize();
             let entries = result?;
@@ -84,7 +84,7 @@ fn run() -> Result<()> {
         }
         "verify" => {
             let archive = PathBuf::from(required(&mut args, "archive path")?);
-            let mut password = optional_password(&engine, &archive)?;
+            let mut password = optional_password(&archive)?;
             let result = engine.verify(&archive, password.as_deref(), report_progress);
             password.zeroize();
             result?;
@@ -93,7 +93,7 @@ fn run() -> Result<()> {
         "extract" | "unpack" => {
             let archive = PathBuf::from(required(&mut args, "archive path")?);
             let destination = PathBuf::from(required(&mut args, "destination directory")?);
-            let mut password = optional_password(&engine, &archive)?;
+            let mut password = optional_password(&archive)?;
             let result =
                 engine.extract(&archive, &destination, password.as_deref(), report_progress);
             password.zeroize();
@@ -126,7 +126,7 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn optional_password(engine: &Engine, archive: &PathBuf) -> Result<Option<String>> {
+fn optional_password(archive: &PathBuf) -> Result<Option<String>> {
     if Engine::archive_requires_password(archive)? {
         Ok(Some(rpassword::prompt_password("Archive password: ")?))
     } else {
