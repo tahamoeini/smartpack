@@ -439,7 +439,9 @@ def main() -> int:
             if tool.get("unavailable"):
                 skipped.append({"tool_id": tool["id"], "reason": tool["unavailable"]})
                 continue
-            version_commands = tool.get("versions", {tool["id"]: tool["version"]})
+            version_commands = tool.get("versions")
+            if version_commands is None:
+                version_commands = {tool["id"]: tool["version"]}
             versions[tool["id"]] = {
                 name: version_string(command, Path.cwd())
                 for name, command in version_commands.items()

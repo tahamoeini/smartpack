@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+SPDX_TEXTS = ROOT / "tools/license_texts"
 
 
 def license_files(package_dir: Path, declared_file: str | None = None) -> list[Path]:
@@ -44,6 +46,24 @@ def npm_license_owner(lock_name: str) -> str | None:
     if lock_name.startswith("node_modules/@napi-rs/lzma-"):
         return "node_modules/@napi-rs/lzma"
     return None
+
+
+def spdx_fallback_files(expression: str) -> tuple[list[Path], list[str]]:
+    identifiers = [
+        token
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9.-]*", expression)
+        if token.upper() not in {"AND", "OR", "WITH"}
+    ]
+    files = []
+    missing = []
+    for identifier in dict.fromkeys(identifiers):
+        candidates = [SPDX_TEXTS / f"{identifier}.txt", SPDX_TEXTS / "exceptions" / f"{identifier}.txt"]
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found is None:
+            missing.append(identifier)
+        else:
+            files.append(found)
+    return files, missing
 
 
 def cargo_packages(manifest: Path, target: str) -> list[dict[str, Any]]:
@@ -156,7 +176,7 @@ def build_notice(target: str) -> tuple[str, list[str]]:
     sections = [
         "# Third-party software notices",
         "",
-        f"This file lists and reproduces license and notice files for the Rust dependency graph filtered to `{target}` and the JavaScript packages installed for this operating system. SmartPack-authored code is licensed separately under Apache-2.0 in `LICENSE`.",
+        f"This file lists and reproduces license and notice files for the Rust dependency graph filtered to `{target}` and the JavaScript packages installed for this operating system. When a published source package omits its license text, the canonical SPDX License List text bundled with SmartPack is included once per identifier. SmartPack-authored code is licensed separately under Apache-2.0 in `LICENSE`.",
         "",
         "## Dependency inventory",
         "",
@@ -168,13 +188,25 @@ def build_notice(target: str) -> tuple[str, list[str]]:
         sections.append(f"| `{package['name']}` | `{package['version']}` | {license} |")
 
     sections.extend(["", "## License and notice texts", ""])
+    emitted_spdx = set()
     for package in packages:
         if package["license"] == "license metadata missing":
             missing.append(f"{package['name']} {package['version']} (license metadata missing)")
-        if not package["files"]:
-            missing.append(f"{package['name']} {package['version']} ({package['license']})")
-            continue
-        for path in package["files"]:
+        files = package["files"]
+        if not files:
+            files, missing_ids = spdx_fallback_files(str(package["license"]))
+            if missing_ids:
+                missing.append(
+                    f"{package['name']} {package['version']} ({package['license']}; no bundled SPDX text for {', '.join(missing_ids)})"
+                )
+            if not files or missing_ids:
+                if not missing_ids:
+                    missing.append(f"{package['name']} {package['version']} ({package['license']})")
+                continue
+        for path in files:
+            is_spdx = path.is_relative_to(SPDX_TEXTS)
+            if is_spdx and path in emitted_spdx:
+                continue
             try:
                 contents = path.read_text(encoding="utf-8", errors="replace").strip()
             except OSError as error:
@@ -183,7 +215,11 @@ def build_notice(target: str) -> tuple[str, list[str]]:
             if not contents:
                 missing.append(f"{package['name']} {package['version']} (empty {path.name})")
                 continue
-            label = f"{package['name']} {package['version']} — {path.name}"
+            if is_spdx:
+                emitted_spdx.add(path)
+                label = f"SPDX License List text — {path.stem}"
+            else:
+                label = f"{package['name']} {package['version']} — {path.name}"
             sections.extend([f"### {label}", "", "    " + contents.replace("\n", "\n    "), ""])
     return "\n".join(sections).rstrip() + "\n", missing
 
