@@ -1,17 +1,19 @@
-# Rust build products
-**/target/
+# Rust build output
+/target/
+/rust_crates/target/
+/desktop/src-tauri/target/
 
-# Tauri and frontend build products
+# Tauri and frontend build output
 **/node_modules/
-desktop/dist/
-desktop/src-tauri/gen/
-desktop/src-tauri/target/
-desktop/src-tauri/binaries/
+/desktop/dist/
+/desktop/src-tauri/gen/
 **/*.tsbuildinfo
 
-# Local archives and editor state
-*.spk
-*.par2
+# Local archive output in the repository root
+/*.spk
+/*.par2
+
+# Python caches and editor state
 **/__pycache__/
 *.py[cod]
 .smartpack-test-*/

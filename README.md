@@ -1,3 +1,22 @@
+<div align="center">
+  <img src="assets/smartpack-logo.svg" alt="SmartPack logo" width="420" />
+
+  <h3>Fast, safe archiving for every desktop.</h3>
+
+  <p>
+    A local-first archive manager for Windows, macOS, and Linux,<br/>
+    powered by a shared Rust engine.
+  </p>
+
+  <a href="https://www.producthunt.com/products/smartpack?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-smartpack" target="_blank" rel="noopener noreferrer">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=dark&amp;t=1789071163896">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=light&amp;t=1789071152289">
+      <img alt="SmartPack - Lossless archiving. Zero dependencies. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1247021&amp;theme=neutral&amp;t=1789071158579">
+    </picture>
+  </a>
+</div>
+
 # SmartPack
 
 SmartPack is a local-first archive manager with a shared Rust engine, command-line tools, and a cross-platform Tauri desktop interface. It aims for a straightforward default workflow while exposing compression profiles and security controls when needed.
